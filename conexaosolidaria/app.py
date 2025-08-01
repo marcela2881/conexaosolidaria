@@ -921,200 +921,140 @@ def pagar_pix():
             return f'<div style="text-align: center;"><h2>❌ Erro ao gerar PIX</h2><p>{response.text}</p></div>'
     except Exception as e:
         return f'<div style="text-align: center;"><h2>❌ Erro</h2><p>{str(e)}</p></div>'
-
-@app.route('/pagar_cartao')
-def pagar_cartao():
-    nome = request.args.get('nome', '')
-    email = request.args.get('email', '')
-    preco = float(request.args.get('preco', 0))
-    categoria_final = request.args.get('categoria_final', '')
-    
-    return f'''
-    <div style="text-align: center; margin: 50px; font-family: Arial;">
-        <h2 style="color: #3b82f6;">💳 Pagamento com Cartão</h2>
-        <p><strong>Nome:</strong> {nome}</p>
-        <p><strong>Valor:</strong> R$ {preco:.2f}</p>
-        
-        <div style="background: #fff3cd; padding: 30px; border-radius: 15px; margin: 30px 0;">
-            <h3>🚧 Em desenvolvimento</h3>
-            <p>A integração com cartão estará disponível em breve!</p>
-            <p>Por enquanto, use o PIX que é mais barato! 😉</p>
-        </div>
-        
-        <a href="/processar_pagamento_pagbank" style="background: #22c55e; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none; margin: 10px;">📱 Usar PIX</a>
-        <a href="/" style="background: #9333ea; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none; margin: 10px;">🔙 Voltar</a>
-    </div>
-    '''
-    nome = request.form['nome']
-    email = request.form['email']
-    idade = int(request.form['idade'])
-    categoria = request.form['categoria']
-    
-    # Lógica de preço igual à original
-    if idade <= 5:
-        preco = 0.0
-        categoria_final = "👶 Criança (0-5 anos) - GRATUITO"
-    elif categoria == "criança 6 a 12 anos_day_use":
-        preco = 25.0
-        categoria_final = "🧒 Criança (6-12 anos) + Day Use"
-    elif categoria == "volei_iniciante":
-        preco = 50.0
-        categoria_final = "🏐 Vôlei Iniciante + Almoço + Day Use"
-    elif categoria == "volei_intermediario":
-        preco = 50.0
-        categoria_final = "🥅 Vôlei Intermediário + Almoço + Day Use"
-    elif categoria == "almoco_day_use":
-        preco = 40.0
-        categoria_final = "🍽️ Almoço Adulto + Day Use"
-    else:
-        preco = 25.0
-        categoria_final = "🍽️ Almoço Criança + Day Use"
-    
-    # Se gratuito, chama a função original
-    if preco == 0:
-        return redirect(url_for('gerar_ingresso_original') + f'?nome={nome}&email={email}&idade={idade}&categoria_final={categoria_final}&preco={preco}')
-    
-    # Para pagos, mostrar opção de pagamento
-    return f'''
-    <div style="text-align: center; margin: 50px; font-family: Arial;">
-        <h2 style="color: #9333ea;">💳 Finalizar Pagamento - PagBank</h2>
-        <p><strong>Nome:</strong> {nome}</p>
-        <p><strong>Categoria:</strong> {categoria_final}</p>
-        <p><strong>Valor:</strong> R$ {preco:.2f}</p>
-        <p><strong>Taxa PagBank:</strong> R$ {preco * 0.0199:.2f} (1,99%)</p>
-        
-        <div style="margin: 30px 0;">
-            <p style="background: #fff3cd; padding: 20px; border-radius: 10px;">
-                🚧 <strong>Integração em desenvolvimento...</strong><br>
-                Por enquanto, use a opção original abaixo:
-            </p>
-        </div>
-        
-        <a href="/gerar_ingresso_original?nome={nome}&email={email}&idade={idade}&categoria_final={categoria_final}&preco={preco}" 
-           style="background: #22c55e; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none; margin: 10px;">
-           🎫 Gerar Ingresso (Temporário)
-        </a>
-        <br><br>
-        <a href="/" style="background: #9333ea; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none;">🔙 Voltar</a>
-    </div>
-    '''
-
-@app.route('/gerar_ingresso_original')
-def gerar_ingresso_original():
+@app.route('/pagar_pix')
+def pagar_pix():
     nome = request.args.get('nome', '')
     email = request.args.get('email', '')
     idade = int(request.args.get('idade', 0))
     categoria_final = request.args.get('categoria_final', '')
     preco = float(request.args.get('preco', 0))
     
-    ingresso_id = str(uuid.uuid4())[:8].upper()
+    # Gerar referência única
+    reference_id = f"PIX_{uuid.uuid4().hex[:8].upper()}"
     
-    conn = sqlite3.connect('conexao_solidaria.db')
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO ingressos (id, nome, email, telefone, idade, categoria, preco)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (ingresso_id, nome, email, '', idade, categoria_final, preco))
-    conn.commit()
-    conn.close()
+    # Dados para criar ordem PIX no PagBank
+    order_data = {
+        "reference_id": reference_id,
+        "customer": {
+            "name": nome,
+            "email": email
+        },
+        "items": [
+            {
+                "reference_id": "item_01",
+                "name": f"Ingresso - {categoria_final}",
+                "quantity": 1,
+                "unit_amount": int(preco * 100)
+            }
+        ],
+        "charges": [
+            {
+                "reference_id": "charge_01",
+                "description": f"Ingresso Conexão Solidária - {categoria_final}",
+                "amount": {
+                    "value": int(preco * 100),
+                    "currency": "BRL"
+                },
+                "payment_method": {
+                    "type": "PIX",
+                    "pix": {
+                        "expiration_date": (datetime.now() + timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%S-03:00')
+                    }
+                }
+            }
+        ]
+    }
     
-    # Gerar QR Code
-    qr_data = f"TORNEIO:{ingresso_id}:{nome}"
-    qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(qr_data)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
-    img_str = base64.b64encode(buffered.getvalue()).decode()
+    headers = {
+        "Authorization": f"Bearer {PAGBANK_TOKEN}",
+        "Content-Type": "application/json"
+    }
     
+    # LOGS DETALHADOS PARA DEBUG
     return f'''
-    <div style="text-align: center; margin: 50px; font-family: Arial;">
-        <h2 style="color: #9333ea;">🎫 Ingresso Gerado com Sucesso!</h2>
-        <p><strong>ID:</strong> {ingresso_id}</p>
-        <p><strong>Nome:</strong> {nome}</p>
-        <p><strong>Categoria:</strong> {categoria_final}</p>
-        <p><strong>Valor:</strong> {"GRATUITO" if preco == 0 else f"R$ {preco:.2f}"}</p>
-        <img src="data:image/png;base64,{img_str}" style="margin: 20px;">
-        <br>
-        <a href="/" style="background: #9333ea; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none; margin: 10px;">🔙 Voltar</a>
-        <a href="/admin" style="background: #22c55e; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none; margin: 10px;">📊 Admin</a>
+    <div style="margin: 50px; font-family: Arial;">
+        <h2 style="color: #dc2626;">🔍 DEBUG - Informações da Requisição</h2>
+        
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h3>🌐 Configuração Atual:</h3>
+            <p><strong>URL Base:</strong> {PAGBANK_BASE_URL}</p>
+            <p><strong>Token (primeiros 20 chars):</strong> {PAGBANK_TOKEN[:20]}...</p>
+            <p><strong>URL Completa:</strong> {PAGBANK_BASE_URL}/orders</p>
+        </div>
+        
+        <div style="background: #e3f2fd; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h3>📋 Dados da Compra:</h3>
+            <p><strong>Nome:</strong> {nome}</p>
+            <p><strong>Email:</strong> {email}</p>
+            <p><strong>Valor:</strong> R$ {preco:.2f}</p>
+            <p><strong>Valor em centavos:</strong> {int(preco * 100)}</p>
+            <p><strong>Reference ID:</strong> {reference_id}</p>
+        </div>
+        
+        <div style="background: #fff3cd; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h3>🚨 TESTE REAL AGORA:</h3>
+            <a href="/teste_api_pagbank?nome={nome}&email={email}&preco={preco}" 
+               style="background: #dc3545; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none;">
+               🧪 TESTAR API PAGBANK
+            </a>
+        </div>
+        
+        <a href="/" style="background: #9333ea; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none;">🔙 Voltar</a>
     </div>
     '''
-@app.route('/admin')
-def admin():
-    conn = sqlite3.connect('conexao_solidaria.db')
-    c = conn.cursor()
-    c.execute('SELECT * FROM ingressos ORDER BY data_compra DESC')
-    ingressos = c.fetchall()
+@a@app.route('/teste_api_pagbank')
+def teste_api_pagbank():
+    nome = request.args.get('nome', '')
+    email = request.args.get('email', '')
+    preco = float(request.args.get('preco', 0))
     
-    c.execute('SELECT COUNT(*) FROM ingressos')
-    total = c.fetchone()[0]
+    reference_id = f"TEST_{uuid.uuid4().hex[:8].upper()}"
     
-    c.execute('SELECT COUNT(*) FROM ingressos WHERE usado = 1')
-    usados = c.fetchone()[0]
+    order_data = {
+        "reference_id": reference_id,
+        "customer": {"name": nome, "email": email},
+        "items": [{"reference_id": "item_01", "name": "Teste", "quantity": 1, "unit_amount": int(preco * 100)}],
+        "charges": [{
+            "reference_id": "charge_01",
+            "description": "Teste PIX",
+            "amount": {"value": int(preco * 100), "currency": "BRL"},
+            "payment_method": {
+                "type": "PIX",
+                "pix": {"expiration_date": (datetime.now() + timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%S-03:00')}
+            }
+        }]
+    }
     
-    c.execute('SELECT SUM(preco) FROM ingressos')
-    receita = c.fetchone()[0] or 0
+    headers = {"Authorization": f"Bearer {PAGBANK_TOKEN}", "Content-Type": "application/json"}
     
-    conn.close()
-    
-    html = f'''
-    <div style="margin: 20px; font-family: Arial;">
-        <h1 style="color: #9333ea; text-align: center;">📊 Painel Administrativo</h1>
+    try:
+        response = requests.post(f"{PAGBANK_BASE_URL}/orders", headers=headers, json=order_data)
         
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 30px 0;">
-            <div style="background: white; padding: 20px; border-radius: 15px; text-align: center; border: 3px solid #3b82f6;">
-                <h2 style="color: #3b82f6; margin: 0;">{total}</h2>
-                <p>🎫 Total de Ingressos</p>
-            </div>
-            <div style="background: white; padding: 20px; border-radius: 15px; text-align: center; border: 3px solid #22c55e;">
-                <h2 style="color: #22c55e; margin: 0;">{usados}</h2>
-                <p>✅ Validados</p>
-            </div>
-            <div style="background: white; padding: 20px; border-radius: 15px; text-align: center; border: 3px solid #f59e0b;">
-                <h2 style="color: #f59e0b; margin: 0;">R$ {receita:.2f}</h2>
-                <p>💰 Receita Total</p>
-            </div>
+        return f'''
+        <div style="margin: 50px; font-family: Arial;">
+            <h2>📊 RESULTADO DO TESTE:</h2>
+            <p><strong>Status Code:</strong> {response.status_code}</p>
+            <p><strong>URL Testada:</strong> {PAGBANK_BASE_URL}/orders</p>
+            <p><strong>Response:</strong></p>
+            <pre style="background: #f8f9fa; padding: 20px; border-radius: 10px; overflow-x: auto;">{response.text}</pre>
+            <a href="/pagar_pix?nome={nome}&email={email}&preco={preco}" style="background: #22c55e; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none;">🔙 Voltar</a>
         </div>
-        
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="/validar" style="background: #22c55e; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none; margin: 10px;">✅ Validar Entrada</a>
-            <a href="/" style="background: #9333ea; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none; margin: 10px;">🏠 Página Inicial</a>
-        </div>
-        
-        <h3 style="color: #9333ea;">📋 Lista de Ingressos</h3>
-        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-            <tr style="background: #f8f9fa;">
-                <th style="padding: 10px; border: 1px solid #ddd;">ID</th>
-                <th style="padding: 10px; border: 1px solid #ddd;">Nome</th>
-                <th style="padding: 10px; border: 1px solid #ddd;">E-mail</th>
-                <th style="padding: 10px; border: 1px solid #ddd;">Categoria</th>
-                <th style="padding: 10px; border: 1px solid #ddd;">Valor</th>
-                <th style="padding: 10px; border: 1px solid #ddd;">Status</th>
-            </tr>
-    '''
-    
-    for ingresso in ingressos:
-        status = "USADO" if ingresso[9] else "ATIVO"
-        status_color = "#22c55e" if ingresso[9] else "#3b82f6"
-        html += f'''
-            <tr>
-                <td style="padding: 8px; border: 1px solid #ddd;"><strong>{ingresso[0]}</strong></td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{ingresso[1]}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{ingresso[2]}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{ingresso[5]}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{"GRATUITO" if ingresso[6] == 0 else f"R$ {ingresso[6]:.2f}"}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; color: {status_color}; font-weight: bold;">{status}</td>
-            </tr>
         '''
-    
-    html += '</table></div>'
+    except Exception as e:
+        return f'''
+        <div style="margin: 50px; font-family: Arial;">
+            <h2 style="color: #dc2626;">❌ ERRO DE CONEXÃO:</h2>
+            <p><strong>Erro:</strong> {str(e)}</p>
+            <p><strong>URL:</strong> {PAGBANK_BASE_URL}/orders</p>
+            <a href="/" style="background: #9333ea; color: white; padding: 15px 30px; border-radius: 25px; text-decoration: none;">🔙 Voltar</a>
+        </div>
+        '''
     return html
 if __name__ == '__main__':
     init_db()
     import os
     port = int(os.environ.get('PORT', 8080))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
