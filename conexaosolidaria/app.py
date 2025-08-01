@@ -8,7 +8,8 @@ import base64
 import os
 from werkzeug.utils import secure_filename
 import requests
-PAGBANK_TOKEN = "1979ca21-1ad4-4182-8a8a-adb532730bba6a0f6ac84902b8486821a00c90bc0a836452-7c20-43b0-b4be-867c1d562c4f"
+PAGBANK_TOKEN = "c56c0ec5-8b64-49b1-9e10-4ef05899477df29ca0dc43f5900d3169908df7a65ab1b5de-be76-410d-88c0-75fc5145978d"
+
 PAGBANK_BASE_URL = "https://sandbox.api.pagseguro.com"
 app = Flask(__name__)
 app.secret_key = 'conexao_solidaria_2025'
@@ -1055,6 +1056,7 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 8080))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
 
 
