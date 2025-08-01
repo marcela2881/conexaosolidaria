@@ -9,8 +9,7 @@ import os
 from werkzeug.utils import secure_filename
 import requests
 PAGBANK_TOKEN = "1979ca21-1ad4-4182-8a8a-adb532730bba6a0f6ac84902b8486821a00c90bc0a836452-7c20-43b0-b4be-867c1d562c4f"
-PAGBANK_BASE_URL = "https://api.pagseguro.com"
-
+PAGBANK_BASE_URL = "https://sandbox.api.pagseguro.com"
 app = Flask(__name__)
 app.secret_key = 'conexao_solidaria_2025'
 UPLOAD_FOLDER = 'uploads'
@@ -1117,4 +1116,5 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 8080))
     app.run(debug=False, host='0.0.0.0', port=port)
+
 
